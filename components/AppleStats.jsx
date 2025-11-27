@@ -7,6 +7,7 @@ export function AppleStats() {
     approvalRate: 0,
     activeBatches: 0
   });
+  
 
   // Simulate loading data
   useEffect(() => {
