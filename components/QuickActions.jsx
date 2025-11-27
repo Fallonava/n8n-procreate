@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { N8NClient } from '../lib/n8n-client';
 
 export function QuickActions({ onActionStart }) {
   const [loadingAction, setLoadingAction] = useState(null);
+  const n8nClient = new N8NClient();
 
   const actions = [
     {
@@ -11,16 +13,16 @@ export function QuickActions({ onActionStart }) {
       icon: '📈',
       buttonText: 'Research Trends',
       color: 'from-purple-500 to-pink-500',
-      duration: 3000
+      workflowId: 'trend-research'
     },
     {
       id: 'portfolio-cleanup',
-      name: 'Portfolio Cleanup', 
+      name: 'Portfolio Cleanup',
       description: 'Remove underperforming images',
       icon: '🧹',
       buttonText: 'Clean Portfolio',
       color: 'from-orange-500 to-red-500',
-      duration: 2000
+      workflowId: 'portfolio-cleanup'
     },
     {
       id: 'market-analysis',
@@ -29,13 +31,13 @@ export function QuickActions({ onActionStart }) {
       icon: '📊',
       buttonText: 'Analyze Market',
       color: 'from-green-500 to-teal-500',
-      duration: 4000
+      workflowId: 'market-analysis'
     }
   ];
 
   const handleAction = async (action) => {
     setLoadingAction(action.id);
-    
+
     if (onActionStart) {
       onActionStart({
         progress: 0,
@@ -44,26 +46,46 @@ export function QuickActions({ onActionStart }) {
       });
     }
 
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += 5;
-      
+    try {
+      // Trigger n8n workflow
       if (onActionStart) {
         onActionStart({
-          progress: Math.min(progress, 100),
-          currentStep: `Processing ${action.name}... (${progress}%)`,
-          status: progress >= 100 ? 'completed' : 'processing'
+          progress: 20,
+          currentStep: `Connecting to n8n for ${action.name}...`,
+          status: 'processing'
         });
       }
 
-      if (progress >= 100) {
-        clearInterval(interval);
-        setTimeout(() => {
-          setLoadingAction(null);
-          alert(`✅ ${action.name} completed successfully!`);
-        }, 500);
+      const result = await n8nClient.triggerWorkflow(action.workflowId, {
+        action: action.id,
+        timestamp: new Date().toISOString()
+      });
+
+      if (onActionStart) {
+        onActionStart({
+          progress: 100,
+          currentStep: `${action.name} initiated successfully!`,
+          status: 'completed'
+        });
       }
-    }, action.duration / 20);
+
+      alert(`Success: ${action.name} workflow started!\nID: ${result.id || 'N/A'}`);
+
+    } catch (error) {
+      console.error(`Error triggering ${action.name}:`, error);
+
+      if (onActionStart) {
+        onActionStart({
+          progress: 0,
+          currentStep: `Failed to start ${action.name}`,
+          status: 'error'
+        });
+      }
+
+      alert(`Failed to start ${action.name}: ${error.message}`);
+    } finally {
+      setLoadingAction(null);
+    }
   };
 
   return (
@@ -72,10 +94,10 @@ export function QuickActions({ onActionStart }) {
         <div className="w-2 h-8 bg-gradient-to-b from-purple-500 to-pink-500 rounded-full mr-3"></div>
         <h3 className="text-xl font-semibold text-gray-900">Quick Actions</h3>
       </div>
-      
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {actions.map((action) => (
-          <button 
+          <button
             key={action.id}
             onClick={() => handleAction(action)}
             disabled={loadingAction}
