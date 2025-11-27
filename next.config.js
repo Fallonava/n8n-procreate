@@ -1,6 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  // Kosongkan, tidak perlu experimental config
+  reactStrictMode: true,
+  swcMinify: true,
+  images: {
+    domains: ['vercel.com'],
+  },
 }
 
 module.exports = nextConfig
