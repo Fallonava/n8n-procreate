@@ -1,5 +1,3 @@
-import { N8NClient } from '../../../lib/n8n-client';
-
 export default async function handler(req, res) {
   // Handle CORS
   if (req.method === 'OPTIONS') {
@@ -19,28 +17,50 @@ export default async function handler(req, res) {
 
   try {
     const { workflowId, data } = req.body;
-    
+
     if (!workflowId) {
       return res.status(400).json({ error: 'Workflow ID is required' });
     }
 
-    console.log('🔄 Triggering n8n workflow:', workflowId);
-    
-    const n8n = new N8NClient();
-    const result = await n8n.triggerWorkflow(workflowId, data);
+    const baseURL = process.env.N8N_BASE_URL || 'https://n8n.fallonava.my.id';
+    const apiKey = process.env.N8N_API_KEY;
+    const webhookUrl = `${baseURL}/webhook/${workflowId}`;
 
-    console.log('✅ n8n response:', result);
-    
-    res.status(200).json({
-      success: true,
-      executionId: result.executionId || 'manual-execution',
-      message: 'Workflow triggered successfully',
-      n8nResponse: result
+    console.log('🔄 Proxying to n8n:', webhookUrl);
+
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-N8N-API-KEY': apiKey || ''
+      },
+      body: JSON.stringify({
+        source: 'frontend-proxy',
+        timestamp: new Date().toISOString(),
+        ...data
+      })
     });
+
+    const responseText = await response.text();
+    console.log('📥 Raw n8n response (proxy):', responseText);
+
+    if (!response.ok) {
+      throw new Error(`n8n error: ${response.status} - ${responseText}`);
+    }
+
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch (e) {
+      // If not JSON, return as text wrapped in object
+      result = { message: responseText };
+    }
+
+    res.status(200).json(result);
+
   } catch (error) {
-    console.error('❌ API Error:', error);
-    res.status(500).json({ 
-      success: false,
+    console.error('❌ Proxy Error:', error);
+    res.status(500).json({
       error: error.message
     });
   }
