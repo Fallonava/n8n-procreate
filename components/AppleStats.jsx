@@ -7,9 +7,7 @@ export function AppleStats() {
     approvalRate: 0,
     activeBatches: 0
   });
-  
 
-  // Simulate loading data
   useEffect(() => {
     const timer = setTimeout(() => {
       setStats({
@@ -66,7 +64,7 @@ export function AppleStats() {
             <div className={`text-2xl ${stat.color}`}>
               {stat.icon}
             </div>
-            <span className={`text-xs font-medium px-2 py-1 rounded-full ${stat.bgColor} ${stat.color.replace('text', 'text')}`}>
+            <span className={`text-xs font-medium px-2 py-1 rounded-full ${stat.bgColor} ${stat.color}`}>
               {stat.trend}
             </span>
           </div>

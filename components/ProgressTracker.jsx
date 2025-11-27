@@ -45,7 +45,6 @@ export function ProgressTracker({ progress, currentStep, status = 'processing' }
           <span>100%</span>
         </div>
 
-        {/* Step Indicators */}
         <div className="grid grid-cols-5 gap-2 mt-4">
           {['Planning', 'Generating', 'Processing', 'Upscaling', 'Complete'].map((step, index) => (
             <div key={step} className="text-center">

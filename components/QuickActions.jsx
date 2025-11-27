@@ -44,7 +44,6 @@ export function QuickActions({ onActionStart }) {
       });
     }
 
-    // Simulate action progress
     let progress = 0;
     const interval = setInterval(() => {
       progress += 5;
