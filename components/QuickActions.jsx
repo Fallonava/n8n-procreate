@@ -64,12 +64,14 @@ export function QuickActions({ onActionStart }) {
       if (onActionStart) {
         onActionStart({
           progress: 100,
-          currentStep: `${action.name} initiated successfully!`,
+          currentStep: `${action.name} completed!`,
           status: 'completed'
         });
       }
 
-      alert(`Success: ${action.name} workflow started!\nID: ${result.id || 'N/A'}`);
+      const meta = result.metadata || {};
+      const msg = `Success: ${action.name} completed!\n\nTitle: ${meta.title || 'N/A'}\nDesc: ${meta.description || 'N/A'}\nLink: ${result.webViewLink || 'Check Google Drive'}`;
+      alert(msg);
 
     } catch (error) {
       console.error(`Error triggering ${action.name}:`, error);

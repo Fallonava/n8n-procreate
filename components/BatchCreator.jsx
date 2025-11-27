@@ -20,72 +20,80 @@ export function BatchCreator({ onBatchStart }) {
     commercialFocus: true
   });
 
-  // ... (niches, styles arrays tetap sama)
+  const niches = ['technology', 'nature', 'business', 'lifestyle', 'abstract', 'food', 'travel'];
+  const styles = ['photorealistic', 'cinematic', 'minimalist', 'vintage', 'cyberpunk', '3d-render'];
 
   const handleCreateBatch = async () => {
     setIsLoading(true);
+    const total = settings.count;
+    const results = [];
+    const errors = [];
 
     if (onBatchStart) {
       onBatchStart({
         progress: 0,
-        currentStep: 'Initializing batch creation...',
+        currentStep: `Initializing batch of ${total} images...`,
         status: 'processing'
       });
     }
 
-    const updateProgress = (progress, step) => {
-      if (onBatchStart) {
-        onBatchStart({
-          progress,
-          currentStep: step,
-          status: 'processing'
-        });
-      }
-    };
-
     try {
-      updateProgress(20, 'Generating AI prompts...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      for (let i = 0; i < total; i++) {
+        const progress = Math.round(((i) / total) * 100);
+        if (onBatchStart) {
+          onBatchStart({
+            progress,
+            currentStep: `Generating image ${i + 1} of ${total} (${settings.niche})...`,
+            status: 'processing'
+          });
+        }
 
-      updateProgress(40, 'Connecting to n8n workflow...');
+        try {
+          // Construct a prompt based on settings
+          const prompt = `Create a professional stock photo for ${settings.niche} niche, style: ${settings.style}. ${settings.commercialFocus ? 'Commercial focus, high quality.' : ''}`;
 
-      const result = await n8nClient.triggerWorkflow('midjourney-batch', settings);
+          // Call n8n workflow (using trend-research as default for batch creation)
+          const result = await n8nClient.triggerWorkflow('trend-research', {
+            prompt,
+            niche: settings.niche,
+            style: settings.style,
+            batchIndex: i,
+            totalBatch: total
+          });
 
-      updateProgress(70, 'Processing with MidJourney...');
-      await new Promise(resolve => setTimeout(resolve, 1500));
+          results.push(result);
+        } catch (err) {
+          console.error(`Failed to generate image ${i + 1}:`, err);
+          errors.push({ index: i, error: err.message });
+        }
+      }
 
       // Simpan data batch untuk export
       const batchData = {
-        ...result,
+        results,
+        errors,
         settings: settings,
         exportedAt: new Date().toISOString()
       };
       setLastBatchData(batchData);
 
-      updateProgress(90, 'Finalizing batch...');
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (onBatchStart) {
+        onBatchStart({
+          progress: 100,
+          currentStep: `Batch completed! ${results.length} success, ${errors.length} failed.`,
+          status: 'completed'
+        });
+      }
 
-      updateProgress(100, 'Batch completed successfully!');
-
-      if (result.status === 'success') {
-        alert(`Success: ${result.message}\n${result.prompts_generated || 'Multiple'} prompts generated!\nNiche: ${result.niche || settings.niche}\nData ready for export!`);
-
-        if (onBatchStart) {
-          setTimeout(() => {
-            onBatchStart({
-              progress: 100,
-              currentStep: 'Batch ready for processing!',
-              status: 'completed'
-            });
-          }, 2000);
-        }
+      if (results.length > 0) {
+        alert(`Success: ${results.length} images generated!\nCheck Google Drive for files.\n${errors.length > 0 ? `${errors.length} failed.` : ''}`);
       } else {
-        throw new Error(result.message || 'Workflow execution failed');
+        throw new Error('All batch items failed.');
       }
 
     } catch (error) {
       console.error('Error:', error);
-      alert('Failed to create batch: ' + error.message);
+      alert('Batch creation failed: ' + error.message);
 
       if (onBatchStart) {
         onBatchStart({
@@ -162,7 +170,48 @@ export function BatchCreator({ onBatchStart }) {
         <>
           {/* Batch Creation Form */}
           <div className="space-y-6">
-            {/* ... (form fields remain exactly the same) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Niche</label>
+                <select
+                  value={settings.niche}
+                  onChange={(e) => setSettings({ ...settings, niche: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                >
+                  {niches.map(n => <option key={n} value={n}>{n.charAt(0).toUpperCase() + n.slice(1)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Style</label>
+                <select
+                  value={settings.style}
+                  onChange={(e) => setSettings({ ...settings, style: e.target.value })}
+                  className="w-full p-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 focus:ring-2 focus:ring-purple-500 outline-none transition-all"
+                >
+                  {styles.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Batch Count ({settings.count})</label>
+              <input
+                type="range"
+                min="1"
+                max="20"
+                value={settings.count}
+                onChange={(e) => setSettings({ ...settings, count: parseInt(e.target.value) })}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+              />
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Commercial Focus</span>
+              <Toggle
+                enabled={settings.commercialFocus}
+                onChange={(val) => setSettings({ ...settings, commercialFocus: val })}
+              />
+            </div>
 
             {/* Export Section */}
             {lastBatchData && (
