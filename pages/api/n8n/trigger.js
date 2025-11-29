@@ -16,7 +16,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { workflowId, data } = req.body;
+    const { workflowId, data, test } = req.body;
 
     if (!workflowId) {
       return res.status(400).json({ error: 'Workflow ID is required' });
@@ -24,9 +24,12 @@ export default async function handler(req, res) {
 
     const baseURL = process.env.N8N_BASE_URL || 'https://n8n.fallonava.my.id';
     const apiKey = process.env.N8N_API_KEY;
-    const webhookUrl = `${baseURL}/webhook/${workflowId}`;
 
-    console.log('🔄 Proxying to n8n:', webhookUrl);
+    // Determine webhook path based on test mode
+    const webhookPath = test ? 'webhook-test' : 'webhook';
+    const webhookUrl = `${baseURL}/${webhookPath}/${workflowId}`;
+
+    console.log(`🔄 Proxying to n8n (${test ? 'TEST' : 'PROD'}):`, webhookUrl);
 
     const response = await fetch(webhookUrl, {
       method: 'POST',

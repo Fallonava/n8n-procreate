@@ -1,0 +1,205 @@
+{
+    "name": "Quick Actions Workflow",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "trend-research",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook-trend",
+            "name": "Webhook Trend Research",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                100,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "portfolio-cleanup",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook-portfolio",
+            "name": "Webhook Portfolio Cleanup",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                100,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "httpMethod": "POST",
+                "path": "market-analysis",
+                "responseMode": "responseNode",
+                "options": {}
+            },
+            "id": "webhook-market",
+            "name": "Webhook Market Analysis",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1,
+            "position": [
+                100,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "return {\n  json: {\n    success: true,\n    message: 'Trend Research Started',\n    metadata: {\n      title: 'Q4 2024 Trends',\n      description: 'Analysis of top performing stock categories',\n      timestamp: new Date().toISOString()\n    }\n  }\n};"
+            },
+            "id": "mock-trend",
+            "name": "Mock Trend Logic",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                300,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "return {\n  json: {\n    success: true,\n    message: 'Portfolio Cleanup Started',\n    metadata: {\n      title: 'Cleanup Report',\n      description: 'Identified 15 underperforming assets',\n      timestamp: new Date().toISOString()\n    }\n  }\n};"
+            },
+            "id": "mock-portfolio",
+            "name": "Mock Portfolio Logic",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                300,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "return {\n  json: {\n    success: true,\n    message: 'Market Analysis Started',\n    metadata: {\n      title: 'Competitor Analysis',\n      description: 'Deep dive into top 5 competitors',\n      timestamp: new Date().toISOString()\n    }\n  }\n};"
+            },
+            "id": "mock-market",
+            "name": "Mock Market Logic",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                300,
+                500
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}",
+                "options": {}
+            },
+            "id": "respond-trend",
+            "name": "Respond Trend",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                500,
+                100
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}",
+                "options": {}
+            },
+            "id": "respond-portfolio",
+            "name": "Respond Portfolio",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                500,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "json",
+                "responseBody": "={{ $json }}",
+                "options": {}
+            },
+            "id": "respond-market",
+            "name": "Respond Market",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1,
+            "position": [
+                500,
+                500
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook Trend Research": {
+            "main": [
+                [
+                    {
+                        "node": "Mock Trend Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook Portfolio Cleanup": {
+            "main": [
+                [
+                    {
+                        "node": "Mock Portfolio Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Webhook Market Analysis": {
+            "main": [
+                [
+                    {
+                        "node": "Mock Market Logic",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Mock Trend Logic": {
+            "main": [
+                [
+                    {
+                        "node": "Respond Trend",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Mock Portfolio Logic": {
+            "main": [
+                [
+                    {
+                        "node": "Respond Portfolio",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Mock Market Logic": {
+            "main": [
+                [
+                    {
+                        "node": "Respond Market",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    }
+}
