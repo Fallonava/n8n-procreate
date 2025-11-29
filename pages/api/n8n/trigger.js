@@ -18,6 +18,8 @@ export default async function handler(req, res) {
   try {
     const { workflowId, data, test } = req.body;
 
+    console.log('📨 Received request:', { workflowId, test, dataKeys: Object.keys(data || {}) });
+
     if (!workflowId) {
       return res.status(400).json({ error: 'Workflow ID is required' });
     }
@@ -30,6 +32,8 @@ export default async function handler(req, res) {
     const webhookUrl = `${baseURL}/${webhookPath}/${workflowId}`;
 
     console.log(`🔄 Proxying to n8n (${test ? 'TEST' : 'PROD'}):`, webhookUrl);
+    console.log('🔑 API Key present:', !!apiKey);
+    console.log('📦 Payload:', JSON.stringify(data, null, 2));
 
     const response = await fetch(webhookUrl, {
       method: 'POST',
@@ -45,7 +49,8 @@ export default async function handler(req, res) {
     });
 
     const responseText = await response.text();
-    console.log('📥 Raw n8n response (proxy):', responseText);
+    console.log('📥 n8n response status:', response.status);
+    console.log('📥 n8n response body:', responseText);
 
     if (!response.ok) {
       throw new Error(`n8n error: ${response.status} - ${responseText}`);
@@ -59,6 +64,7 @@ export default async function handler(req, res) {
       result = { message: responseText };
     }
 
+    console.log('✅ Success! Returning result to frontend');
     res.status(200).json(result);
 
   } catch (error) {
