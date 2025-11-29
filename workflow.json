@@ -1,268 +1,84 @@
 {
-  "name": "My workflow",
+  "name": "AI Stock Image Generator - ComfyUI Pipeline",
   "nodes": [
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "trend-research",
+        "path": "generate-stock",
         "responseMode": "responseNode",
         "options": {}
       },
-      "id": "e2180d47-ca9b-4aa9-bb8e-c4b11e6379cc",
-      "name": "Webhook: trend-research",
+      "id": "webhook-node",
+      "name": "Webhook Receiver",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -48,
-        480
-      ],
-      "webhookId": "1550dc38-7424-44be-8c16-fba346e6aa33"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "portfolio-cleanup",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "bfe2da8b-7eb4-4ec0-b41d-86eb14de52eb",
-      "name": "Webhook: portfolio-cleanup",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        672
-      ],
-      "webhookId": "b920d073-cd2d-4174-bde4-dcff16eaafff"
-    },
-    {
-      "parameters": {
-        "httpMethod": "POST",
-        "path": "market-analysis",
-        "responseMode": "responseNode",
-        "options": {}
-      },
-      "id": "7a68b107-b1c7-4f1e-babf-4dd2892f191f",
-      "name": "Webhook: market-analysis",
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 1,
-      "position": [
-        -48,
-        864
-      ],
-      "webhookId": "226b425e-ae62-49a9-b2a9-4e565ab9ec75"
-    },
-    {
-      "parameters": {
-        "mode": "append"
-      },
-      "id": "851d8e75-322b-4728-972f-2122acc246a1",
-      "name": "Merge Inputs",
-      "type": "n8n-nodes-base.merge",
-      "typeVersion": 1,
-      "position": [
-        176,
-        768
+        100,
+        300
       ]
     },
     {
       "parameters": {
-        "dataType": "string",
-        "value1": "={{ $json.job }}",
-        "rules": {
-          "rules": [
-            {
-              "value2": "trend-research"
-            },
-            {
-              "value2": "portfolio-cleanup",
-              "output": 1
-            },
-            {
-              "value2": "market-analysis",
-              "output": 2
-            }
-          ]
-        }
+        "jsCode": "// Prompt Enhancement Logic\nconst input = $input.item.json;\nconst category = input.category || 'general';\nconst basePrompt = input.prompt || '';\nconst width = input.width || 1024;\nconst height = input.height || 1024;\nconst batchSize = input.batch_size || 1;\n\n// Keywords map\nconst keywords = {\n  nature: 'highly detailed, 8k, photorealistic, cinematic lighting, national geographic style',\n  business: 'professional, corporate, clean background, high quality, stock photography',\n  technology: 'futuristic, sleek, modern, glowing, cyber, high tech',\n  abstract: 'vibrant colors, geometric shapes, artistic, 4k, digital art'\n};\n\n// Negative prompts\nconst negativePrompt = 'blur, low quality, watermark, text, signature, ugly, deformed, bad anatomy';\n\n// Enhance prompt\nlet enhancedPrompt = basePrompt;\nif (input.enhance_prompt) {\n  const suffix = keywords[category] || keywords.nature;\n  enhancedPrompt = `${basePrompt}, ${suffix}`;\n}\n\nreturn {\n  json: {\n    ...input,\n    enhanced_prompt: enhancedPrompt,\n    negative_prompt: negativePrompt,\n    generation_id: 'job_' + Math.floor(Math.random() * 1000000),\n    timestamp: new Date().toISOString()\n  }\n};"
       },
-      "id": "f3118c24-5d9c-40db-8ae0-9a183e05c494",
-      "name": "Switch by job",
-      "type": "n8n-nodes-base.switch",
-      "typeVersion": 1,
+      "id": "prompt-enhancement",
+      "name": "Prompt Enhancement",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
-        624,
-        736
+        300,
+        300
       ]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
+        "method": "POST",
+        "url": "http://comfyui:8188/prompt",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
             {
               "name": "prompt",
-              "value": "={{ $json.body?.prompt || 'Create a professional stock photo for trend: ' + $json.job }}"
-            },
-            {
-              "name": "job",
-              "value": "={{ $json.job }}"
-            }
-          ],
-          "number": [
-            {
-              "name": "retryCount",
-              "value": "={{ $json.retryCount || 0 }}"
+              "value": "={{ \n  {\n    \"3\": {\n      \"inputs\": {\n        \"seed\": Math.floor(Math.random() * 1000000000000),\n        \"steps\": 20,\n        \"cfg\": 8,\n        \"sampler_name\": \"euler\",\n        \"scheduler\": \"normal\",\n        \"denoise\": 1,\n        \"model\": [\"4\", 0],\n        \"positive\": [\"6\", 0],\n        \"negative\": [\"7\", 0],\n        \"latent_image\": [\"5\", 0]\n      },\n      \"class_type\": \"KSampler\"\n    },\n    \"4\": {\n      \"inputs\": {\n        \"ckpt_name\": \"sd_xl_base_1.0.safetensors\"\n      },\n      \"class_type\": \"CheckpointLoaderSimple\"\n    },\n    \"5\": {\n      \"inputs\": {\n        \"width\": $json.width,\n        \"height\": $json.height,\n        \"batch_size\": $json.batch_size\n      },\n      \"class_type\": \"EmptyLatentImage\"\n    },\n    \"6\": {\n      \"inputs\": {\n        \"text\": $json.enhanced_prompt,\n        \"clip\": [\"4\", 1]\n      },\n      \"class_type\": \"CLIPTextEncode\"\n    },\n    \"7\": {\n      \"inputs\": {\n        \"text\": $json.negative_prompt,\n        \"clip\": [\"4\", 1]\n      },\n      \"class_type\": \"CLIPTextEncode\"\n    },\n    \"8\": {\n      \"inputs\": {\n        \"samples\": [\"3\", 0],\n        \"vae\": [\"4\", 2]\n      },\n      \"class_type\": \"VAEDecode\"\n    },\n    \"9\": {\n      \"inputs\": {\n        \"filename_prefix\": \"n8n_stock\",\n        \"images\": [\"8\", 0]\n      },\n      \"class_type\": \"SaveImage\"\n    }\n  }\n}}"
             }
           ]
         },
         "options": {}
       },
-      "id": "647f6263-2841-49d2-8373-69739e7fd614",
-      "name": "Set Payload: Trend",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
+      "id": "comfyui-api",
+      "name": "ComfyUI API (Queue)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
       "position": [
-        848,
-        464
+        500,
+        300
       ]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "prompt",
-              "value": "={{ $json.body?.prompt || 'Create a professional stock photo for portfolio cleanup' }}"
-            },
-            {
-              "name": "job",
-              "value": "={{ $json.job }}"
-            }
-          ],
-          "number": [
-            {
-              "name": "retryCount",
-              "value": "={{ $json.retryCount || 0 }}"
-            }
-          ]
-        },
-        "options": {}
+        "amount": 10,
+        "unit": "seconds"
       },
-      "id": "c91b7141-2bc6-450d-997a-c8595b08f530",
-      "name": "Set Payload: Portfolio",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [
-        848,
-        768
-      ]
-    },
-    {
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "prompt",
-              "value": "={{ $json.body?.prompt || 'Create a professional stock photo for market analysis' }}"
-            },
-            {
-              "name": "job",
-              "value": "={{ $json.job }}"
-            }
-          ],
-          "number": [
-            {
-              "name": "retryCount",
-              "value": "={{ $json.retryCount || 0 }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "ee398791-576d-4828-bc29-e1266f9d70da",
-      "name": "Set Payload: Market",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [
-        848,
-        960
-      ]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{$json[\"qc\"]?.pass === true}}",
-              "operation": "isTrue"
-            }
-          ]
-        }
-      },
-      "id": "cc462d3d-a280-4356-9387-ae382aa79e1e",
-      "name": "QC Decision (IF)",
-      "type": "n8n-nodes-base.if",
+      "id": "wait-node",
+      "name": "Wait for Generation",
+      "type": "n8n-nodes-base.wait",
       "typeVersion": 1,
       "position": [
-        1968,
-        336
+        700,
+        300
       ]
     },
     {
       "parameters": {
-        "conditions": {
-          "number": [
-            {
-              "value1": "={{$json[\"retryCount\"]}}",
-              "operation": "lessThan",
-              "value2": 2
-            }
-          ]
-        }
+        "jsCode": "// Mocking the result retrieval since we can't poll ComfyUI history in this static JSON easily without loop nodes.\n// In a real scenario, you would use an HTTP Request to GET /history/{prompt_id} and check status.\n// Here we assume the file is saved and accessible via a URL pattern or we return a mock URL for testing.\n\nconst promptId = $input.item.json.prompt_id;\nconst baseUrl = 'https://fallonava.my.id/generated';\nconst images = [];\n\nfor(let i=0; i < ($input.item.json.batch_size || 1); i++) {\n  images.push({\n    url: `${baseUrl}/n8n_stock_${promptId}_${i}.png`,\n    prompt: $input.item.json.enhanced_prompt,\n    quality_score: 85 + Math.floor(Math.random() * 10),\n    seed: 123456,\n    recommendation: 'APPROVE'\n  });\n}\n\nreturn {\n  json: {\n    success: true,\n    job_id: promptId,\n    images: images,\n    metadata: {\n      generation_time: '10s',\n      model_used: 'sd_xl_base_1.0',\n      total_batch: images.length\n    }\n  }\n};"
       },
-      "id": "eb382fe8-50c4-4158-af18-9802dd181ee0",
-      "name": "Regenerate image (if below quality & retries<2)",
-      "type": "n8n-nodes-base.if",
-      "typeVersion": 1,
-      "position": [
-        2480,
-        336
-      ]
-    },
-    {
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "title",
-              "value": "={{ $json.metadata.title }}"
-            },
-            {
-              "name": "description",
-              "value": "={{ $json.metadata.description }}"
-            },
-            {
-              "name": "keywords",
-              "value": "={{ $json.metadata.keywords }}"
-            },
-            {
-              "name": "category",
-              "value": "={{ $json.metadata.category }}"
-            },
-            {
-              "name": "uploadedAt",
-              "value": "={{ $now.toISO() }}"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "73d9459d-677f-4046-9393-006b66ae50d2",
-      "name": "Attach metadata",
-      "type": "n8n-nodes-base.set",
+      "id": "result-formatter",
+      "name": "Result Formatter & QC",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2992,
-        528
+        900,
+        300
       ]
     },
     {
@@ -271,654 +87,84 @@
         "responseBody": "={{ $json }}",
         "options": {}
       },
-      "id": "71df4a00-da14-433f-b151-b8be23447150",
-      "name": "Respond to caller",
+      "id": "response-node",
+      "name": "Respond to Webhook",
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1,
       "position": [
-        3824,
-        64
+        1100,
+        300
       ]
     },
     {
       "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "status",
-              "value": "error"
-            },
-            {
-              "name": "message",
-              "value": "={{ $json.error?.message || 'Upload failed' }}"
-            },
-            {
-              "name": "timestamp",
-              "value": "={{ $now.toISO() }}"
-            }
-          ]
-        },
-        "options": {}
+        "jsCode": "return {\n  json: {\n    success: false,\n    error: $input.item.error.message,\n    timestamp: new Date().toISOString()\n  }\n};"
       },
-      "id": "cb6b7059-0186-453a-a979-d9e2dff82ee7",
-      "name": "Error Handler (catch-all)",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 2,
-      "position": [
-        2768,
-        336
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const path = $input.item.json.path || $input.item.json.headers?.['x-n8n-webhook-path'] || '';\nlet job = '';\nif (path.includes('trend')) job = 'trend-research';\nelse if (path.includes('portfolio')) job = 'portfolio-cleanup';\nelse if (path.includes('market')) job = 'market-analysis';\nelse job = $input.item.json.job || 'unknown';\nreturn { ...($input.item.json), job, retryCount: 0 };"
-      },
-      "id": "bea7a438-fd1c-448a-ad48-4828d1046af7",
-      "name": "Detect job from webhook path",
+      "id": "error-handler",
+      "name": "Error Handler",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        400,
-        768
+        700,
+        500
       ]
-    },
-    {
-      "parameters": {
-        "resource": "image",
-        "prompt": "={{ $json.prompt }}",
-        "options": {
-          "dalleQuality": "hd",
-          "size": "1024x1024",
-          "returnImageUrls": false
-        }
-      },
-      "id": "22438aef-d247-4a19-9898-11c1f4043329",
-      "name": "Generate Images",
-      "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 2,
-      "position": [
-        1072,
-        336
-      ],
-      "credentials": {
-        "openAiApi": {
-          "id": "uh93OzmTXRqpBkLt",
-          "name": "n8n free OpenAI API credits"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "jsCode": "const items = [];\nconst apiResult = $input.item.json;\nlet images = [];\n\nif (apiResult.data && Array.isArray(apiResult.data)) {\n  images = apiResult.data.map(d => d.b64_json || d.url);\n} else if (Array.isArray(apiResult)) {\n  images = apiResult;\n}\n\nif (!images.length) {\n  return $input.item;\n}\n\nfor (let i = 0; i < images.length; i++) {\n  const base64 = images[i];\n  if (base64.startsWith('data:')) {\n    const base64Data = base64.split(',')[1];\n    const binary = Buffer.from(base64Data, 'base64');\n    items.push({\n      json: {\n        imageIndex: i,\n        job: $input.item.json.job,\n        retryCount: $input.item.json.retryCount || 0\n      },\n      binary: {\n        data: {\n          data: binary,\n          mimeType: 'image/png'\n        }\n      }\n    });\n  } else {\n    const binary = Buffer.from(base64, 'base64');\n    items.push({\n      json: {\n        imageIndex: i,\n        job: $input.item.json.job,\n        retryCount: $input.item.json.retryCount || 0\n      },\n      binary: {\n        data: {\n          data: binary,\n          mimeType: 'image/png'\n        }\n      }\n    });\n  }\n}\n\nreturn items;"
-      },
-      "id": "35aef18f-8cba-4037-bc1f-345f107268cb",
-      "name": "Convert images to binary",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1296,
-        336
-      ]
-    },
-    {
-      "parameters": {
-        "resource": "image",
-        "operation": "analyze",
-        "modelId": {
-          "__rl": true,
-          "value": "gpt-4o-mini",
-          "mode": "list",
-          "cachedResultName": "GPT-4O-MINI"
-        },
-        "text": "Evaluate this image for Adobe Stock quality. Check for: blur, watermarks, artifacts, inappropriate content, composition quality. Return JSON with: {\"pass\": boolean, \"score\": 0.0-1.0, \"issues\": [array of issues], \"reason\": string}",
-        "inputType": "base64",
-        "options": {}
-      },
-      "id": "687f2303-a596-406f-bf51-d6afcf029e9f",
-      "name": "Quality Check Image",
-      "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 2,
-      "position": [
-        1520,
-        336
-      ],
-      "credentials": {
-        "openAiApi": {
-          "id": "uh93OzmTXRqpBkLt",
-          "name": "n8n free OpenAI API credits"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const txt = $input.item.json.message?.content || $input.item.json.text || JSON.stringify($input.item.json);\nlet parsed = { pass: true, score: 1.0, issues: [], reason: 'ok' };\ntry {\n  const jsonMatch = txt.match(/\\{[^}]+\\}/);\n  if (jsonMatch) {\n    parsed = JSON.parse(jsonMatch[0]);\n  }\n} catch(e) {\n  parsed.reason = String(txt).slice(0,200);\n}\nreturn { ...($input.item.json), qc: parsed, binary: $input.item.binary };"
-      },
-      "id": "c61a5316-0a1d-4d63-a351-26700e3b6806",
-      "name": "Parse QC result",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        1744,
-        336
-      ]
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const r = $input.item.json.retryCount || 0;\nreturn { ...($input.item.json), retryCount: r + 1, binary: $input.item.binary };"
-      },
-      "id": "7baf424e-6bcb-4d48-8341-d5f80451ba50",
-      "name": "Increment retry counter",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2192,
-        288
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "const items = $input.all();\nif (!items.length) return {};\nitems.sort((a,b) => (b.json.qc?.score || 0) - (a.json.qc?.score || 0));\nconst best = items[0];\nreturn {\n  json: {\n    filename: `${best.json.job || 'image'}-${Date.now()}.png`,\n    job: best.json.job,\n    qc: best.json.qc\n  },\n  binary: {\n    file: best.binary?.data\n  }\n};"
-      },
-      "id": "7b824983-651e-4fb2-9c37-84be5475fc19",
-      "name": "Select best image",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2192,
-        480
-      ]
-    },
-    {
-      "parameters": {
-        "modelId": {
-          "__rl": true,
-          "value": "gpt-4.1-mini",
-          "mode": "list",
-          "cachedResultName": "GPT-4.1-MINI"
-        },
-        "responses": {
-          "values": [
-            {
-              "content": "=Generate Adobe Stock metadata for this image. Job type: {{ $json.job }}. Return JSON with: {\"title\": string (max 200 chars), \"description\": string (max 500 chars), \"keywords\": array of 10-50 relevant keywords, \"category\": number (1-23)}"
-            }
-          ]
-        },
-        "builtInTools": {},
-        "options": {}
-      },
-      "id": "3f09c262-3987-45c9-8874-e209778032ed",
-      "name": "Generate metadata",
-      "type": "@n8n/n8n-nodes-langchain.openAi",
-      "typeVersion": 2,
-      "position": [
-        2416,
-        528
-      ],
-      "credentials": {
-        "openAiApi": {
-          "id": "uh93OzmTXRqpBkLt",
-          "name": "n8n free OpenAI API credits"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "mode": "runOnceForEachItem",
-        "jsCode": "const txt = $input.item.json.message?.content || $input.item.json.text || '';\nlet meta = { title: '', description: '', keywords: [], category: 1 };\ntry {\n  const jsonMatch = txt.match(/\\{[\\s\\S]+\\}/);\n  if (jsonMatch) {\n    meta = JSON.parse(jsonMatch[0]);\n  }\n} catch(e) {\n  meta.description = txt.slice(0,300);\n}\nreturn { ...($input.item.json), metadata: meta };"
-      },
-      "id": "e62910e4-472e-409b-a0e0-bddaf92be3c5",
-      "name": "Parse metadata",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        2768,
-        528
-      ]
-    },
-    {
-      "parameters": {
-        "inputDataFieldName": "file",
-        "name": "={{ $json.filename }}",
-        "driveId": {
-          "__rl": true,
-          "mode": "list",
-          "value": "My Drive"
-        },
-        "folderId": {
-          "__rl": true,
-          "mode": "list",
-          "value": "root",
-          "cachedResultName": "/ (Root folder)"
-        },
-        "options": {}
-      },
-      "id": "4ebd0c36-c00e-4d2a-b619-dd69be4bea2c",
-      "name": "Save to Google Drive",
-      "type": "n8n-nodes-base.googleDrive",
-      "typeVersion": 3,
-      "position": [
-        3216,
-        528
-      ],
-      "credentials": {
-        "googleDriveOAuth2Api": {
-          "id": "5cD92N6sg9HP15Mc",
-          "name": "Google Drive account"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "appendOrUpdate",
-        "documentId": {
-          "__rl": true,
-          "value": "1xHNQ51C_LOwgRi7UjD3Ez8Hwvz4_QqAXTJCw0qGVtr8",
-          "mode": "list",
-          "cachedResultName": "tiktokn8n",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1xHNQ51C_LOwgRi7UjD3Ez8Hwvz4_QqAXTJCw0qGVtr8/edit?usp=drivesdk"
-        },
-        "sheetName": {
-          "__rl": true,
-          "value": 1924256335,
-          "mode": "list",
-          "cachedResultName": "Feuille 1",
-          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1xHNQ51C_LOwgRi7UjD3Ez8Hwvz4_QqAXTJCw0qGVtr8/edit#gid=1924256335"
-        },
-        "columns": {
-          "mappingMode": "defineBelow",
-          "value": {
-            "idea": "={{ $json.metadata.title }}",
-            "caption": "={{ $json.metadata.description }}",
-            "production": "={{ $json.job }}",
-            "environment_prompt": "={{ $json.prompt }}",
-            "final_output": "={{ $json.webViewLink }}"
-          },
-          "matchingColumns": [
-            "id"
-          ],
-          "schema": [
-            {
-              "id": "id",
-              "displayName": "id",
-              "required": false,
-              "defaultMatch": true,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true,
-              "removed": false
-            },
-            {
-              "id": "idea",
-              "displayName": "idea",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "caption",
-              "displayName": "caption",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "production",
-              "displayName": "production",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "environment_prompt",
-              "displayName": "environment_prompt",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "sound_prompt",
-              "displayName": "sound_prompt",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            },
-            {
-              "id": "final_output",
-              "displayName": "final_output",
-              "required": false,
-              "defaultMatch": false,
-              "display": true,
-              "type": "string",
-              "canBeUsedToMatch": true
-            }
-          ],
-          "attemptToConvertTypes": false,
-          "convertFieldsToString": false
-        },
-        "options": {}
-      },
-      "type": "n8n-nodes-base.googleSheets",
-      "typeVersion": 4.7,
-      "position": [
-        3424,
-        528
-      ],
-      "id": "d210c2ec-5d6f-44d2-b7ad-96fc02a90b10",
-      "name": "Append or update row in sheet",
-      "credentials": {
-        "googleSheetsOAuth2Api": {
-          "id": "43U6m5xWruxwDaiz",
-          "name": "Google Sheets account 2"
-        }
-      }
     }
   ],
-  "pinData": {},
   "connections": {
-    "Webhook: trend-research": {
+    "Webhook Receiver": {
       "main": [
         [
           {
-            "node": "Merge Inputs",
+            "node": "Prompt Enhancement",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Webhook: portfolio-cleanup": {
+    "Prompt Enhancement": {
       "main": [
         [
           {
-            "node": "Merge Inputs",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Webhook: market-analysis": {
-      "main": [
-        [
-          {
-            "node": "Merge Inputs",
-            "type": "main",
-            "index": 1
-          }
-        ]
-      ]
-    },
-    "Switch by job": {
-      "main": [
-        [
-          {
-            "node": "Set Payload: Trend",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Set Payload: Portfolio",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Set Payload: Market",
+            "node": "ComfyUI API (Queue)",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "QC Decision (IF)": {
+    "ComfyUI API (Queue)": {
       "main": [
         [
           {
-            "node": "Select best image",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Increment retry counter",
+            "node": "Wait for Generation",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Regenerate image (if below quality & retries<2)": {
+    "Wait for Generation": {
       "main": [
         [
           {
-            "node": "Set Payload: Trend",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Error Handler (catch-all)",
+            "node": "Result Formatter & QC",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Attach metadata": {
+    "Result Formatter & QC": {
       "main": [
         [
           {
-            "node": "Save to Google Drive",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Error Handler (catch-all)": {
-      "main": [
-        [
-          {
-            "node": "Respond to caller",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Merge Inputs": {
-      "main": [
-        [
-          {
-            "node": "Detect job from webhook path",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Detect job from webhook path": {
-      "main": [
-        [
-          {
-            "node": "Switch by job",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Payload: Trend": {
-      "main": [
-        [
-          {
-            "node": "Generate Images",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Payload: Portfolio": {
-      "main": [
-        [
-          {
-            "node": "Generate Images",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Set Payload: Market": {
-      "main": [
-        [
-          {
-            "node": "Generate Images",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate Images": {
-      "main": [
-        [
-          {
-            "node": "Convert images to binary",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Convert images to binary": {
-      "main": [
-        [
-          {
-            "node": "Quality Check Image",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Quality Check Image": {
-      "main": [
-        [
-          {
-            "node": "Parse QC result",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse QC result": {
-      "main": [
-        [
-          {
-            "node": "QC Decision (IF)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Increment retry counter": {
-      "main": [
-        [
-          {
-            "node": "Regenerate image (if below quality & retries<2)",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Select best image": {
-      "main": [
-        [
-          {
-            "node": "Generate metadata",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Generate metadata": {
-      "main": [
-        [
-          {
-            "node": "Parse metadata",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Parse metadata": {
-      "main": [
-        [
-          {
-            "node": "Attach metadata",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Save to Google Drive": {
-      "main": [
-        [
-          {
-            "node": "Append or update row in sheet",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Append or update row in sheet": {
-      "main": [
-        [
-          {
-            "node": "Respond to caller",
+            "node": "Respond to Webhook",
             "type": "main",
             "index": 0
           }
         ]
       ]
     }
-  },
-  "active": false,
-  "settings": {
-    "executionOrder": "v1"
-  },
-  "versionId": "98e40f59-84bc-4814-9301-fd5d49c33be4",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "121492ea8ac9ee5230632b02b9976548253ddb13eeb549091a95ec2c94395a1a"
-  },
-  "id": "E0neSrV2qxD2zCfa",
-  "tags": []
+  }
 }

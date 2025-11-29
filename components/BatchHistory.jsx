@@ -1,90 +1,96 @@
-import { exportBatchData } from '../lib/export-utils';
+import { useState, useEffect } from 'react';
 
 export function BatchHistory() {
-  const batches = [
-    {
-      id: 1,
-      date: '2024-01-15 14:30',
-      niche: 'technology',
-      count: 8,
-      status: 'completed',
-      results: '8/8 successful',
-      data: {
-        prompts: [
-          { prompt: "minimalist photorealistic technology product shot...", niche: "technology" },
-          { prompt: "modern tech gadget professional photography...", niche: "technology" }
-        ],
-        settings: { niche: 'technology', count: 8, style: 'photorealistic' }
+  const [history, setHistory] = useState([]);
+
+  useEffect(() => {
+    // Load history from localStorage
+    const loadHistory = () => {
+      try {
+        const stored = localStorage.getItem('batch_history');
+        if (stored) {
+          setHistory(JSON.parse(stored));
+        }
+      } catch (e) {
+        console.error("Failed to load history", e);
       }
-    },
-    // ... other batches with data
-  ];
+    };
 
-  const handleExportBatch = (batch) => {
-    exportBatchData(batch.data, 'json');
-  };
+    loadHistory();
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
-      case 'processing': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
-      case 'error': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
-      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+    // Listen for storage events (in case updated from another tab or component)
+    window.addEventListener('storage', loadHistory);
+    // Custom event for same-tab updates
+    const handleLocalUpdate = () => loadHistory();
+    window.addEventListener('batch_history_updated', handleLocalUpdate); // We might need to dispatch this
+
+    // Poll for changes every few seconds as a fallback/simple way to update
+    const interval = setInterval(loadHistory, 2000);
+
+    return () => {
+      window.removeEventListener('storage', loadHistory);
+      window.removeEventListener('batch_history_updated', handleLocalUpdate);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const clearHistory = () => {
+    if (confirm('Are you sure you want to clear all history?')) {
+      localStorage.removeItem('batch_history');
+      setHistory([]);
     }
   };
 
-  return (
-    <div className="glass-card rounded-2xl p-6">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center">
-          <div className="w-2 h-8 bg-gradient-to-b from-green-500 to-blue-500 rounded-full mr-3"></div>
-          <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Recent Batches</h3>
-        </div>
-        <span className="text-sm text-gray-500 dark:text-gray-400">{batches.length} batches</span>
+  if (history.length === 0) {
+    return (
+      <div className="glass-card rounded-2xl p-8">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Recent Batches</h3>
+        <p className="text-gray-500 dark:text-gray-400 text-center py-4">No recent batches found.</p>
       </div>
-      
-      <div className="space-y-4">
-        {batches.map((batch) => (
-          <div key={batch.id} className="flex items-center justify-between p-4 rounded-xl border border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500 smooth-transition">
-            <div className="flex items-center space-x-4">
-              <div className={`w-3 h-3 rounded-full ${
-                batch.status === 'completed' ? 'bg-green-500' : 
-                batch.status === 'processing' ? 'bg-yellow-500' : 'bg-gray-500'
-              }`}></div>
-              <div>
-                <div className="font-medium text-gray-900 dark:text-gray-100 capitalize">{batch.niche} Batch</div>
-                <div className="text-sm text-gray-500 dark:text-gray-400">{batch.date} • {batch.count} images</div>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-3">
-              <div className="text-right">
-                <div className={`text-sm font-medium ${getStatusColor(batch.status)} px-2 py-1 rounded-full`}>
-                  {batch.results}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 capitalize mt-1">{batch.status}</div>
-              </div>
-              
-              {batch.status === 'completed' && (
-                <button
-                  onClick={() => handleExportBatch(batch)}
-                  className="p-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg smooth-transition"
-                  title="Export batch data"
-                >
-                  📥
-                </button>
+    );
+  }
+
+  return (
+    <div className="glass-card rounded-2xl p-8">
+      <div className="flex justify-between items-center mb-6">
+        <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Recent Batches</h3>
+        <button
+          onClick={clearHistory}
+          className="text-xs text-red-500 hover:text-red-700 hover:underline"
+        >
+          Clear History
+        </button>
+      </div>
+
+      <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+        {history.map((batch) => (
+          <div key={batch.id} className="flex items-center p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <div className="w-12 h-12 bg-gray-200 dark:bg-gray-700 rounded-lg overflow-hidden flex-shrink-0">
+              {batch.thumbnail ? (
+                <img src={batch.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">N/A</div>
               )}
+            </div>
+            <div className="ml-4 flex-1">
+              <div className="flex justify-between">
+                <h4 className="font-medium text-gray-900 dark:text-gray-100 capitalize">{batch.settings?.niche || 'Unknown'}</h4>
+                <span className="text-xs text-gray-500">{new Date(batch.date).toLocaleDateString()}</span>
+              </div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {batch.successCount} success, {batch.errorCount} failed
+              </p>
+              <div className="flex gap-2 mt-1">
+                <span className="text-[10px] px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded">
+                  {batch.settings?.style}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 rounded">
+                  {batch.settings?.aspectRatio || '16:9'}
+                </span>
+              </div>
             </div>
           </div>
         ))}
-        
-        {batches.length === 0 && (
-          <div className="text-center py-8">
-            <div className="text-gray-400 dark:text-gray-500 text-4xl mb-2">📝</div>
-            <p className="text-gray-500 dark:text-gray-400">No batches yet</p>
-            <p className="text-sm text-gray-400 dark:text-gray-500">Create your first batch to see history here</p>
-          </div>
-        )}
       </div>
     </div>
   );

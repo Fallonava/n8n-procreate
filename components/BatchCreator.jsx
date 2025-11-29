@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { exportBatchData } from '../lib/export-utils';
 import { TemplateManager } from './TemplateManager';
 import { useTemplates } from '../contexts/TemplatesContext';
 import { Toggle } from './Toggle';
 import { N8NClient } from '../lib/n8n-client';
 
-export function BatchCreator({ onBatchStart }) {
+export function BatchCreator({ onBatchStart, onImageGenerated }) {
   const [isLoading, setIsLoading] = useState(false);
   const [lastBatchData, setLastBatchData] = useState(null);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const { saveTemplate } = useTemplates();
   const n8nClient = new N8NClient();
 
@@ -16,21 +17,36 @@ export function BatchCreator({ onBatchStart }) {
     niche: 'technology',
     count: 5,
     style: 'photorealistic',
+    aspectRatio: '16:9',
+    sampler: 'DPM++ 2M Karras',
+    steps: 30,
+    cfg: 7,
     autoUpscale: true,
     commercialFocus: true
   });
 
-  const niches = ['technology', 'nature', 'business', 'lifestyle', 'abstract', 'food', 'travel'];
-  const styles = ['photorealistic', 'cinematic', 'minimalist', 'vintage', 'cyberpunk', '3d-render'];
+  const [previewPrompt, setPreviewPrompt] = useState('');
+
+  const niches = ['technology', 'nature', 'business', 'lifestyle', 'abstract', 'food', 'travel', 'health', 'education'];
+  const styles = ['photorealistic', 'cinematic', 'minimalist', 'vintage', 'cyberpunk', '3d-render', 'watercolor', 'oil painting'];
+  const ratios = ['1:1', '16:9', '9:16', '4:3', '3:4'];
+  const samplers = ['DPM++ 2M Karras', 'Euler a', 'DDIM', 'UniPC'];
+
+  useEffect(() => {
+    const prompt = `Create a professional stock photo for ${settings.niche} niche, style: ${settings.style}. ${settings.commercialFocus ? 'Commercial focus, high quality, 8k, highly detailed.' : ''} --ar ${settings.aspectRatio} --v 6.0`;
+    setPreviewPrompt(prompt);
+  }, [settings]);
 
   const handleCreateBatch = async () => {
     setIsLoading(true);
     const total = settings.count;
     const results = [];
     const errors = [];
+    const batchId = Date.now().toString();
 
     if (onBatchStart) {
       onBatchStart({
+        id: batchId,
         progress: 0,
         currentStep: `Initializing batch of ${total} images...`,
         status: 'processing'
@@ -42,6 +58,7 @@ export function BatchCreator({ onBatchStart }) {
         const progress = Math.round(((i) / total) * 100);
         if (onBatchStart) {
           onBatchStart({
+            id: batchId,
             progress,
             currentStep: `Generating image ${i + 1} of ${total} (${settings.niche})...`,
             status: 'processing'
@@ -52,16 +69,40 @@ export function BatchCreator({ onBatchStart }) {
           // Construct a prompt based on settings
           const prompt = `Create a professional stock photo for ${settings.niche} niche, style: ${settings.style}. ${settings.commercialFocus ? 'Commercial focus, high quality.' : ''}`;
 
-          // Call n8n workflow (using trend-research as default for batch creation)
+          // Call n8n workflow
           const result = await n8nClient.triggerWorkflow('trend-research', {
             prompt,
             niche: settings.niche,
             style: settings.style,
+            aspectRatio: settings.aspectRatio,
+            sampler: settings.sampler,
+            steps: settings.steps,
+            cfg: settings.cfg,
             batchIndex: i,
-            totalBatch: total
+            totalBatch: total,
+            timestamp: new Date().toISOString()
           });
 
-          results.push(result);
+          // Normalize result for UI
+          const imageResult = {
+            ...result,
+            url: result.outputUrl || result.url || result.image, // Adapt to n8n output
+            prompt: prompt,
+            niche: settings.niche,
+            style: settings.style,
+            ratio: settings.aspectRatio,
+            steps: settings.steps,
+            cfg: settings.cfg,
+            sampler: settings.sampler,
+            timestamp: new Date().toISOString()
+          };
+
+          results.push(imageResult);
+
+          if (onImageGenerated) {
+            onImageGenerated(imageResult);
+          }
+
         } catch (err) {
           console.error(`Failed to generate image ${i + 1}:`, err);
           errors.push({ index: i, error: err.message });
@@ -70,6 +111,7 @@ export function BatchCreator({ onBatchStart }) {
 
       // Simpan data batch untuk export
       const batchData = {
+        id: batchId,
         results,
         errors,
         settings: settings,
@@ -77,17 +119,32 @@ export function BatchCreator({ onBatchStart }) {
       };
       setLastBatchData(batchData);
 
+      // Save to History (LocalStorage)
+      try {
+        const history = JSON.parse(localStorage.getItem('batch_history') || '[]');
+        history.unshift({
+          id: batchId,
+          date: new Date().toISOString(),
+          settings: settings,
+          successCount: results.length,
+          errorCount: errors.length,
+          thumbnail: results[0]?.url
+        });
+        localStorage.setItem('batch_history', JSON.stringify(history.slice(0, 50))); // Keep last 50
+      } catch (e) {
+        console.error("Failed to save history", e);
+      }
+
       if (onBatchStart) {
         onBatchStart({
+          id: batchId,
           progress: 100,
           currentStep: `Batch completed! ${results.length} success, ${errors.length} failed.`,
           status: 'completed'
         });
       }
 
-      if (results.length > 0) {
-        alert(`Success: ${results.length} images generated!\nCheck Google Drive for files.\n${errors.length > 0 ? `${errors.length} failed.` : ''}`);
-      } else {
+      if (results.length === 0) {
         throw new Error('All batch items failed.');
       }
 
@@ -170,6 +227,8 @@ export function BatchCreator({ onBatchStart }) {
         <>
           {/* Batch Creation Form */}
           <div className="space-y-6">
+
+            {/* Main Settings */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Niche</label>
@@ -193,16 +252,94 @@ export function BatchCreator({ onBatchStart }) {
               </div>
             </div>
 
+            {/* Aspect Ratio & Count */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Aspect Ratio</label>
+                <div className="grid grid-cols-5 gap-2">
+                  {ratios.map(r => (
+                    <button
+                      key={r}
+                      onClick={() => setSettings({ ...settings, aspectRatio: r })}
+                      className={`p-2 text-xs font-medium rounded-lg border transition-all ${settings.aspectRatio === r ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/30 dark:border-blue-400 dark:text-blue-300' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}
+                    >
+                      {r}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Batch Count ({settings.count})</label>
+                <input
+                  type="range"
+                  min="1"
+                  max="20"
+                  value={settings.count}
+                  onChange={(e) => setSettings({ ...settings, count: parseInt(e.target.value) })}
+                  className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-purple-600"
+                />
+              </div>
+            </div>
+
+            {/* Advanced Options Toggle */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Batch Count ({settings.count})</label>
-              <input
-                type="range"
-                min="1"
-                max="20"
-                value={settings.count}
-                onChange={(e) => setSettings({ ...settings, count: parseInt(e.target.value) })}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
-              />
+              <button
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-sm text-purple-600 dark:text-purple-400 font-medium flex items-center hover:underline"
+              >
+                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options'}
+                <svg className={`w-4 h-4 ml-1 transform transition-transform ${showAdvanced ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
+              </button>
+            </div>
+
+            {/* Advanced Options Panel */}
+            {showAdvanced && (
+              <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl space-y-4 animate-in fade-in slide-in-from-top-2">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Sampler</label>
+                    <select
+                      value={settings.sampler}
+                      onChange={(e) => setSettings({ ...settings, sampler: e.target.value })}
+                      className="w-full p-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800"
+                    >
+                      {samplers.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">Steps ({settings.steps})</label>
+                    <input
+                      type="range"
+                      min="10"
+                      max="50"
+                      step="1"
+                      value={settings.steps}
+                      onChange={(e) => setSettings({ ...settings, steps: parseInt(e.target.value) })}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-500 uppercase mb-1">CFG Scale ({settings.cfg})</label>
+                    <input
+                      type="range"
+                      min="1"
+                      max="20"
+                      step="0.5"
+                      value={settings.cfg}
+                      onChange={(e) => setSettings({ ...settings, cfg: parseFloat(e.target.value) })}
+                      className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700 accent-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Prompt Preview */}
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-100 dark:border-blue-800">
+              <label className="block text-xs font-bold text-blue-600 dark:text-blue-400 uppercase mb-2">Prompt Preview</label>
+              <p className="text-sm text-gray-700 dark:text-gray-300 font-mono break-words">
+                {previewPrompt}
+              </p>
             </div>
 
             <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
@@ -212,31 +349,6 @@ export function BatchCreator({ onBatchStart }) {
                 onChange={(val) => setSettings({ ...settings, commercialFocus: val })}
               />
             </div>
-
-            {/* Export Section */}
-            {lastBatchData && (
-              <div className="border-t border-gray-200 dark:border-gray-600 pt-6">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Export Options</h3>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => handleExport('json')}
-                    className="p-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white rounded-xl font-medium hover:shadow-lg smooth-transition text-center"
-                  >
-                    <div className="text-lg mb-1"></div>
-                    <div>JSON Export</div>
-                    <div className="text-xs opacity-80">Structured data</div>
-                  </button>
-                  <button
-                    onClick={() => handleExport('csv')}
-                    className="p-3 bg-gradient-to-r from-blue-500 to-cyan-600 text-white rounded-xl font-medium hover:shadow-lg smooth-transition text-center"
-                  >
-                    <div className="text-lg mb-1"></div>
-                    <div>CSV Export</div>
-                    <div className="text-xs opacity-80">Spreadsheet format</div>
-                  </button>
-                </div>
-              </div>
-            )}
 
             {/* Create Button */}
             <button
